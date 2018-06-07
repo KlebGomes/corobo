@@ -48,23 +48,17 @@ class TestLabHub(unittest.TestCase):
 
         self.mock_team.is_member.return_value = True
         plugins.labhub.os.environ['GH_TOKEN'] = 'patched?'
-        testbot.assertCommand('!invite meet to developers',
-                                   '@meet, you are a part of developers')
+        testbot.assertCommand('!invite meet to developers', '@meet, you are a part of developers')
         self.assertEqual(labhub.TEAMS, teams)
-        testbot.assertCommand('!invite meet to something',
-                                   'select from one of the')
+        testbot.assertCommand('!invite meet to something', 'select from one of the')
 
         self.mock_team.is_member.return_value = False
 
-        testbot.assertCommand('!invite meet to developers',
-                                   ':poop:')
+        testbot.assertCommand('!invite meet to developers', ':poop:')
 
-        testbot.assertCommand('!invite meetto newcomers',
-                                   'Command "invite" / "invite meetto" not found.')
+        testbot.assertCommand('!invite meetto newcomers', 'Command "invite" / "invite meetto" not found.')
     def test_hello_world_callback(self):
-        teams = {
-            'coala newcomers': self.mock_team,
-        }
+        teams = {'coala newcomers': self.mock_team,}
 
         testbot = TestBot(extra_plugin_dir='plugins', loglevel=logging.ERROR)
         testbot.start()
@@ -104,22 +98,15 @@ class TestLabHub(unittest.TestCase):
             plugins.labhub.LabHub, logging.ERROR, {'BACKEND': 'text'}
         )
         labhub.activate()
-        labhub.REPOS = {'repository': self.mock_repo,
-                        'repository.github.io': self.mock_repo}
+        labhub.REPOS = {'repository': self.mock_repo,'repository.github.io': self.mock_repo}
 
-        testbot_public.assertCommand('!new issue repository this is the title\nbo\ndy',
-                              'Here you go')
+        testbot_public.assertCommand('!new issue repository this is the title\nbo\ndy','Here you go')
 
-        labhub.REPOS['repository'].create_issue.assert_called_once_with(
-            'this is the title', 'bo\ndy\nOpened by @None at [text]()'
-        )
+        labhub.REPOS['repository'].create_issue.assert_called_once_with('this is the title', 'bo\ndy\nOpened by @None at [text]()')
 
-        testbot_public.assertCommand('!new issue repository.github.io another title\nand body',
-                              'Here you go')
+        testbot_public.assertCommand('!new issue repository.github.io another title\nand body', 'Here you go')
 
-        labhub.REPOS['repository.github.io'].create_issue.assert_called_with(
-            'another title', 'and body\nOpened by @None at [text]()'
-        )
+        labhub.REPOS['repository.github.io'].create_issue.assert_called_with('another title', 'and body\nOpened by @None at [text]()')
 
         testbot_public.assertCommand('!new issue coala title', 'repository that does not exist')
 
@@ -137,21 +124,17 @@ class TestLabHub(unittest.TestCase):
         mock_iss.assignees = (None, )
         mock_iss.unassign = MagicMock()
 
-        testbot.assertCommand('!unassign https://github.com/coala/name/issues/23',
-                              'you are unassigned now', timeout=10000)
+        testbot.assertCommand('!unassign https://github.com/coala/name/issues/23', 'you are unassigned now', timeout=10000)
         self.mock_repo.get_issue.assert_called_with(23)
         mock_iss.unassign.assert_called_once_with(None)
 
         mock_iss.assignees = ('meetmangukiya', )
-        testbot.assertCommand('!unassign https://github.com/coala/name/issues/23',
-                           'not an assignee on the issue')
+        testbot.assertCommand('!unassign https://github.com/coala/name/issues/23', 'not an assignee on the issue')
 
-        testbot.assertCommand('!unassign https://github.com/coala/s/issues/52',
-                              'Repository doesn\'t exist.')
+        testbot.assertCommand('!unassign https://github.com/coala/s/issues/52', 'Repository doesn\'t exist.')
 
 
-        testbot.assertCommand('!unassign https://gitlab.com/ala/am/issues/532',
-                               'Repository not owned by our org.')
+        testbot.assertCommand('!unassign https://gitlab.com/ala/am/issues/532', 'Repository not owned by our org.')
 
     def test_assign_cmd(self):
         plugins.labhub.GitHub = create_autospec(IGitt.GitHub.GitHub.GitHub)
@@ -178,8 +161,7 @@ class TestLabHub(unittest.TestCase):
         mock_issue.assignees = tuple()
         self.mock_team.is_member.return_value = False
 
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'You\'ve been assigned to the issue')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'You\'ve been assigned to the issue')
 
         # no assignee, newcomer, difficulty/low
         mock_issue.labels = PropertyMock()
@@ -187,52 +169,43 @@ class TestLabHub(unittest.TestCase):
         mock_issue.assignees = tuple()
         self.mock_team.is_member.return_value = True
 
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'You\'ve been assigned to the issue')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'You\'ve been assigned to the issue')
 
         # no assignee, newcomer, no labels
         self.mock_team.is_member.return_value = True
         mock_issue.labels = tuple()
         mock_issue.assignees = tuple()
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'not eligible to be assigned to this issue')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'not eligible to be assigned to this issue')
         testbot.pop_message()
 
         # no assignee, newcomer, difficulty medium
         mock_issue.labels = ('difficulty/medium', )
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'not eligible to be assigned to this issue')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'not eligible to be assigned to this issue')
         testbot.pop_message()
 
         # no assignee, newcomer, difficulty medium
         labhub.GH_ORG_NAME = 'not-coala'
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'assigned')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'assigned')
         labhub.GH_ORG_NAME = 'coala'
 
         # newcomer, developer, difficulty/medium
         mock_dev_team.is_member.return_value = True
         mock_maint_team.is_member.return_value = False
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'assigned')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'assigned')
 
         # has assignee
         mock_issue.assignees = ('somebody', )
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'already assigned to someone')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'already assigned to someone')
 
         # has assignee same as user
         mock_issue.assignees = (None, )
-        testbot.assertCommand(cmd.format('coala', 'a', '23'),
-                              'already assigned to you')
+        testbot.assertCommand(cmd.format('coala', 'a', '23'), 'already assigned to you')
 
         # non-existent repository
-        testbot.assertCommand(cmd.format('coala', 'c', '23'),
-                              'Repository doesn\'t exist.')
+        testbot.assertCommand(cmd.format('coala', 'c', '23'), 'Repository doesn\'t exist.')
 
         # unknown org
-        testbot.assertCommand(cmd.format('coa', 'a', '23'),
-                              'Repository not owned by our org.')
+        testbot.assertCommand(cmd.format('coa', 'a', '23'), 'Repository not owned by our org.')
 
     def test_mark_cmd(self):
         labhub, testbot = plugin_testbot(plugins.labhub.LabHub, logging.ERROR)
@@ -251,10 +224,8 @@ class TestLabHub(unittest.TestCase):
         self.mock_repo.get_mr.return_value = mock_github_mr
 
         # Non-eistent repo
-        testbot.assertCommand(cmd_github.format('wip', 'a', 'b', '23'),
-                              'Repository doesn\'t exist.')
-        testbot.assertCommand('!mark wip https://gitlab.com/a/b/merge_requests/2',
-                              'Repository doesn\'t exist.')
+        testbot.assertCommand(cmd_github.format('wip', 'a', 'b', '23'), 'Repository doesn\'t exist.')
+        testbot.assertCommand('!mark wip https://gitlab.com/a/b/merge_requests/2', 'Repository doesn\'t exist.')
 
         mock_github_mr.web_url = 'https://github.com/coala/a/pull/23'
         mock_gitlab_mr.web_url = 'https://gitlab.com/coala/a/merge_requests/23'
@@ -262,31 +233,23 @@ class TestLabHub(unittest.TestCase):
         # mark wip
         mock_github_mr.labels = ['process/pending review']
         mock_gitlab_mr.labels = ['process/pending review']
-        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'),
-                              'marked work in progress')
-        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'),
-                              '@johndoe, please check your pull request')
-        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'),
-                              'https://github.com/coala/a/pull/23')
+        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'), 'marked work in progress')
+        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'), '@johndoe, please check your pull request')
+        testbot.assertCommand(cmd_github.format('wip', 'coala', 'a', '23'), 'https://github.com/coala/a/pull/23')
 
         self.mock_repo.get_mr.return_value = mock_gitlab_mr
 
-        testbot.assertCommand(cmd_gitlab.format('wip', 'coala', 'a', '23'),
-                              '@johndoe, please check your pull request')
-        testbot.assertCommand(cmd_gitlab.format('wip', 'coala', 'a', '23'),
-                              'https://gitlab.com/coala/a/merge_requests/23')
+        testbot.assertCommand(cmd_gitlab.format('wip', 'coala', 'a', '23'), '@johndoe, please check your pull request')
+        testbot.assertCommand(cmd_gitlab.format('wip', 'coala', 'a', '23'), 'https://gitlab.com/coala/a/merge_requests/23')
 
         self.mock_repo.get_mr.return_value = mock_github_mr
 
         # mark pending
         mock_github_mr.labels = ['process/wip']
         mock_gitlab_mr.labels = ['process/wip']
-        testbot.assertCommand(cmd_github.format('pending', 'coala', 'a', '23'),
-                              'marked pending review')
-        testbot.assertCommand(cmd_github.format('pending-review', 'coala', 'a', '23'),
-                              'marked pending review')
-        testbot.assertCommand(cmd_github.format('pending review', 'coala', 'a', '23'),
-                              'marked pending review')
+        testbot.assertCommand(cmd_github.format('pending', 'coala', 'a', '23'), 'marked pending review')
+        testbot.assertCommand(cmd_github.format('pending-review', 'coala', 'a', '23'), 'marked pending review')
+        testbot.assertCommand(cmd_github.format('pending review', 'coala', 'a', '23'), 'marked pending review')
 
     def test_alive(self):
         labhub, testbot = plugin_testbot(plugins.labhub.LabHub, logging.ERROR)
@@ -308,22 +271,16 @@ class TestLabHub(unittest.TestCase):
             labhub.gh_repos['coala'].search_mrs.return_value = [1, 2]
             labhub.gh_repos['coala-bears'].search_mrs.return_value = []
             labhub.gh_repos['coala-utils'].search_mrs.return_value = []
-            testbot.assertCommand('!pr stats 10hours',
-                                  '2 PRs opened in last 10 hours\n'
-                                  'The community is alive', timeout=100)
+            testbot.assertCommand('!pr stats 10hours', '2 PRs opened in last 10 hours\n''The community is alive', timeout=100)
 
             labhub.gh_repos['coala'].search_mrs.return_value = []
-            testbot.assertCommand('!pr stats 5hours',
-                                  '0 PRs opened in last 5 hours\n'
-                                  'The community is dead')
+            testbot.assertCommand('!pr stats 5hours', '0 PRs opened in last 5 hours\n''The community is dead')
 
             labhub.gh_repos['coala'].search_mrs.return_value = [
                 1, 2, 3, 4, 5,
                 6, 7, 8, 9, 10
             ]
-            testbot.assertCommand('!pr stats 3hours',
-                                  '10 PRs opened in last 3 hours\n'
-                                  'The community is on fire')
+            testbot.assertCommand('!pr stats 3hours', '10 PRs opened in last 3 hours\n''The community is on fire')
 
     def test_invite_me(self):
         teams = {
@@ -337,12 +294,10 @@ class TestLabHub(unittest.TestCase):
         labhub._teams = teams
 
         plugins.labhub.os.environ['GH_TOKEN'] = 'patched?'
-        testbot.assertCommand('!invite me',
-                              'We\'ve just sent you an invite')
+        testbot.assertCommand('!invite me','We\'ve just sent you an invite')
         with self.assertRaises(queue.Empty):
             testbot.pop_message()
 
-        testbot.assertCommand('!hey there invite me',
-                              'Command \"hey\" / \"hey there\" not found.')
+        testbot.assertCommand('!hey there invite me', 'Command \"hey\" / \"hey there\" not found.')
         with self.assertRaises(queue.Empty):
              testbot.pop_message()
