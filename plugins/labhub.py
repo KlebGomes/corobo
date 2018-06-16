@@ -62,6 +62,7 @@ class LabHub(BotPlugin):
             self.REPOS.update(self.gl_repos)
 
         self.invited_users = set()
+        self.hello_world_users = set()
 
     @property
     def TEAMS(self):
@@ -71,8 +72,12 @@ class LabHub(BotPlugin):
     def TEAMS(self, new):
         self._teams = new
 
+    @staticmethod
+    def is_room_member(invitee, msg):
+        return invitee in msg.frm.room.occupants
+
     # Ignore LineLengthBear, PycodestyleBear
-    @re_botcmd(pattern=r'^(?:(?:welcome)|(?:inv)|(?:invite))\s+(?:(?:@?([\w-]+)(?:\s+(?:to)\s+(\w+))?)|(me))$',
+    @re_botcmd(pattern=r'^(?:(?:welcome)|(?:inv)|(?:invite))\s+@?([\w-]+)(?:\s+(?:to)\s+(\w+))?$',
                re_cmd_name_help='invite ([@]<username> [to <team>]|me)')
     def invite_cmd(self, msg, match):
         """
@@ -82,45 +87,63 @@ class LabHub(BotPlugin):
         invitee = match.group(1)
         inviter = msg.frm.nick
 
-        if invitee == 'me':
-            user = msg.frm.nick
-            response = tenv().get_template(
-                'labhub/promotions/newcomers.jinja2.md'
-            ).render(
-                username=user,
-            )
-            self.send(msg.frm, response)
-            self.TEAMS[self.GH_ORG_NAME + ' newcomers'].invite(user)
-            self.invited_users.add(user)
-            return
-
         team = 'newcomers' if match.group(2) is None else match.group(2)
+        team = team.lower()
+
+        is_developer = self.TEAMS[self.GH_ORG_NAME +
+                                  ' developers'].is_member(inviter)
+        is_maintainer = self.TEAMS[self.GH_ORG_NAME +
+                                   ' maintainers'].is_member(inviter)
 
         self.log.info('{} invited {} to {}'.format(inviter, invitee, team))
 
-        if self.TEAMS[self.GH_ORG_NAME + ' maintainers'].is_member(inviter):
-            valid_teams = ['newcomers', 'developers', 'maintainers']
-            if team.lower() not in valid_teams:
-                return 'Please select from one of the ' + ', '.join(valid_teams)
+        valid_teams = ['newcomers', 'developers', 'maintainers']
+        if team not in valid_teams:
+            return 'Please select from one of the valid teams: ' + ', '.join(
+                    valid_teams)
+
+        def invite(invitee, team):
             team_mapping = {
                 'newcomers': self.GH_ORG_NAME + ' newcomers',
                 'developers': self.GH_ORG_NAME + ' developers',
                 'maintainers': self.GH_ORG_NAME + ' maintainers'
             }
 
-            # send the invite
-            self.TEAMS[team_mapping[team.lower()]].invite(invitee)
+            self.TEAMS[team_mapping[team]].invite(invitee)
+
+        if not self.is_room_member(invitee, msg):
+            return '@{} is not a member of this room.'.format(invitee)
+
+        if is_maintainer:
+            invite(invitee, team)
             return tenv().get_template(
-                'labhub/promotions/{}.jinja2.md'.format(team.lower())
+                'labhub/promotions/{}.jinja2.md'.format(team)
             ).render(
                 target=invitee,
             )
+        elif is_developer:
+            if team == 'newcomers':
+                invite(invitee, team)
+                return tenv().get_template(
+                    'labhub/promotions/{}.jinja2.md'.format(team)
+                ).render(
+                    target=invitee,
+                )
+            else:
+                return tenv().get_template(
+                    'labhub/errors/not-eligible-invite.jinja2.md'
+                ).render(
+                    action='invite someone to developers or maintainers',
+                    designation='maintainer',
+                    target=inviter,
+                )
         else:
             return tenv().get_template(
-                'labhub/errors/not-maintainer.jinja2.md'
+                'labhub/errors/not-eligible-invite.jinja2.md'
             ).render(
                 action='invite other people',
-                target=invitee,
+                designation='developer/maintainer',
+                target=inviter,
             )
 
     def callback_message(self, msg):
@@ -128,16 +151,14 @@ class LabHub(BotPlugin):
         if re.search(r'hello\s*,?\s*world', msg.body, flags=re.IGNORECASE):
             user = msg.frm.nick
             if (not self.TEAMS[self.GH_ORG_NAME + ' newcomers'].is_member(user)
-                    and user not in self.invited_users):
-                # send the invite
+                    and user not in self.hello_world_users):
                 response = tenv().get_template(
-                    'labhub/promotions/newcomers.jinja2.md'
+                    'labhub/hello-world.jinja2.md'
                 ).render(
                     target=user,
                 )
                 self.send(msg.frm, response)
-                self.TEAMS[self.GH_ORG_NAME + ' newcomers'].invite(user)
-                self.invited_users.add(user)
+                self.hello_world_users.add(user)
 
     @re_botcmd(pattern=r'(?:new|file) issue ([\w\-\.]+?)(?: |\n)(.+?)(?:$|\n((?:.|\n)*))',  # Ignore LineLengthBear, PyCodeStyleBear
                re_cmd_name_help='new issue repo-name title\n[description]',
@@ -164,6 +185,14 @@ class LabHub(BotPlugin):
             ).render(
                 target=user,
             )
+
+    @staticmethod
+    def is_newcomer_issue(iss):
+        diff_labels = filter(lambda x: 'difficulty' in x, iss.labels)
+        if list(filter(lambda x: 'newcomer' in x, diff_labels)):
+            return True
+        else:
+            return False
 
     @re_botcmd(pattern=r'^unassign\s+https://(github|gitlab)\.com/([^/]+)/([^/]+)/issues/(\d+)',  # Ignore LineLengthBear, PyCodeStyleBear
                re_cmd_name_help='unassign <complete-issue-URL>',
@@ -278,7 +307,7 @@ class LabHub(BotPlugin):
                 1. A newcomer is asking for assignment to low or newcomer issue.
                 2. The user belongs to developers or maintainers team as well as
                    newcomers team.
-                False if
+                False if:
                 1. A newcomer asks for assignment to an issue that has no
                    difficulty label.
                 2. A newcomer asks for assignment to an issue with difficulty
@@ -301,6 +330,33 @@ class LabHub(BotPlugin):
                         return False
                 elif self.GH3_ORG.is_member(user):
                     return True
+
+            @register_check
+            def newcomer_issue_check(user, iss):
+                """
+                True if:  Issue is not labeled `difficulty/newcomer` and
+                          user is not a newcomer.
+                False if: A `difficulty/newcomer` issue is already assigned
+                          to the user.
+                """
+                if (self.is_newcomer_issue(iss)
+                    and self.TEAMS[self.GH_ORG_NAME +
+                                   ' newcomers'].is_member(user)):
+                    search_query = 'user:coala assignee:{} ' \
+                                   'label:difficulty/newcomer'.format(user)
+                    result = GitHub.raw_search(GitHubToken(
+                        os.environ.get('GH_TOKEN')), search_query)
+                    return not (sum(1 for _ in result) >= 1)
+                else:
+                    return True
+
+            @register_check
+            def block_gci_issue_assignment(user, iss):
+                """
+                True if the issue is not labelled with 'initiatives/gci'.
+                False if the issue has been labelled with 'initiatives/gci'.
+                """
+                return 'initiatives/gci' not in iss.labels
 
         def eligible(user, iss):
             for chk in checks:
